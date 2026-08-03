@@ -1,0 +1,5 @@
+"""System-wide constants locked in PLAN.md."""
+
+MANDATORY_BREAK_MINUTES = 10
+MAX_DETOUR_INSERTION_MINUTES = 8
+MATCH_ONE_P95_MS = 500

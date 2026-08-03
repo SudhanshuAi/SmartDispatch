@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "SmartDispatch Guest",
+    "slug": "smartdispatch-guest",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f3d38"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "local.smartdispatch.guest"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0f3d38",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "local.smartdispatch.guest",
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}
