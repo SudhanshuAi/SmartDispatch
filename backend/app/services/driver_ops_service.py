@@ -213,6 +213,10 @@ def update_trip_status(db: Session, driver_id: UUID, action: str) -> DriverTripV
             raise HTTPException(status_code=400, detail="Trip not en route")
         trip.status = TripStatus.at_pickup
         driver.status = DriverStatus.at_pickup
+        # Snap map position to pickup so fleet map shows the driver at the stop
+        if trip.origin:
+            driver.last_lat = trip.origin.lat
+            driver.last_lng = trip.origin.lng
         for stop in trip.stops:
             if stop.stop_type == StopType.pickup and stop.arrived_at is None:
                 stop.arrived_at = now
@@ -232,6 +236,10 @@ def update_trip_status(db: Session, driver_id: UUID, action: str) -> DriverTripV
                 tg.boarded_at = now
         trip.status = TripStatus.in_progress
         driver.status = DriverStatus.in_trip
+        # Keep at pickup until next GPS ping; ensures in_trip is visible on fleet map
+        if trip.origin and (driver.last_lat is None or driver.last_lng is None):
+            driver.last_lat = trip.origin.lat
+            driver.last_lng = trip.origin.lng
         note = f"halt_seconds={halt_secs}"
         trip.notes = f"{trip.notes + '; ' if trip.notes else ''}{note}"
         trip.route_version += 1

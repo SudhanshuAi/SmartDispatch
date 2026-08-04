@@ -226,10 +226,22 @@ th {
 .badge.declined {
   color: var(--danger);
 }
-.badge.en_route,
-.badge.in_trip,
+.badge.en_route {
+  color: #2bb3a3;
+  border-color: rgba(43, 179, 163, 0.45);
+}
 .badge.at_pickup {
-  color: var(--accent);
+  color: #f0a020;
+  border-color: rgba(240, 160, 32, 0.45);
+}
+.badge.in_trip,
+.badge.in_progress {
+  color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.45);
+}
+.badge.on_break {
+  color: #8fa3b8;
+  border-color: rgba(143, 163, 184, 0.45);
 }
 
 .btn {
