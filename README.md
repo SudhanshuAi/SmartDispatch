@@ -7,9 +7,29 @@ Event-scoped vehicle dispatch: **Guest app** + **Admin Portal** (Admin & Driver 
 | [`PLAN.md`](PLAN.md) | Architecture & milestones |
 | [`DESIGN.md`](DESIGN.md) | Matching approach & trade-offs |
 
-After cloning this repo you can run the **full stack locally** with the steps below.
+---
+
+## Live demo
+
+| Service | URL |
+| --- | --- |
+| **Admin Portal** | [https://smart-dispatch-one.vercel.app/admin](https://smart-dispatch-one.vercel.app/admin) |
+| **Guest app** | [https://smart-dispatch-e8nc.vercel.app/](https://smart-dispatch-e8nc.vercel.app/) |
+| **API** | [https://smartdispatch-production.up.railway.app](https://smartdispatch-production.up.railway.app) |
+| API docs | [https://smartdispatch-production.up.railway.app/docs](https://smartdispatch-production.up.railway.app/docs) |
+| API health | [https://smartdispatch-production.up.railway.app/health](https://smartdispatch-production.up.railway.app/health) |
+
+Seed logins (email-only):
+
+| Email | App | Seed name |
+| --- | --- | --- |
+| `admin@smartdispatch.local` | Admin Portal | Ops Admin |
+| `driver01@smartdispatch.local` | Admin Portal (Driver) | Ravi Menon |
+| `guest001@smartdispatch.local` | Guest app | Priya Kapoor |
 
 ---
+
+After cloning this repo you can also run the **full stack locally** with the steps below.
 
 ## Prerequisites
 
@@ -67,14 +87,6 @@ Leave this terminal running.
 
 - Docs: http://localhost:8000/docs
 - Health: http://localhost:8000/health
-
-Seed logins (email-only login in UIs):
-
-| Email | App | Seed name |
-| --- | --- | --- |
-| `admin@smartdispatch.local` | Admin Portal | Ops Admin |
-| `driver01@smartdispatch.local` | Admin Portal (Driver) | Ravi Menon |
-| `guest001@smartdispatch.local` | Guest app | Priya Kapoor |
 
 ### 3. Admin Portal
 
