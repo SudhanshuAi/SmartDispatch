@@ -26,6 +26,14 @@ ACTIVE_TRIP = {
     TripStatus.in_progress,
 }
 
+# Once a driver has accepted / is en route, prefer that over newer competing offers
+COMMITTED_TRIP = {
+    TripStatus.accepted,
+    TripStatus.en_route,
+    TripStatus.at_pickup,
+    TripStatus.in_progress,
+}
+
 # Explicitly never shown on Guest "Your ride"
 ENDED_TRIP = {TripStatus.completed, TripStatus.cancelled}
 
@@ -91,7 +99,8 @@ def list_locations(db: Session) -> list[GuestLocationRead]:
 
 
 def _active_trip_for_guest(db: Session, guest_id: UUID) -> Trip | None:
-    return (
+    """Single ride for the guest app: prefer accepted/en-route over a newer competing offer."""
+    trips = (
         db.query(Trip)
         .join(TripGuest, TripGuest.trip_id == Trip.id)
         .options(
@@ -103,8 +112,15 @@ def _active_trip_for_guest(db: Session, guest_id: UUID) -> Trip | None:
         )
         .filter(TripGuest.guest_id == guest_id, Trip.status.in_(ACTIVE_TRIP))
         .order_by(Trip.created_at.desc())
-        .first()
+        .all()
     )
+    if not trips:
+        return None
+    committed = [t for t in trips if t.status in COMMITTED_TRIP]
+    if committed:
+        # Newest committed assignment wins (should usually be one after accept cleanup)
+        return committed[0]
+    return trips[0]
 
 
 def get_match(db: Session, guest_id: UUID) -> GuestMatchView | None:

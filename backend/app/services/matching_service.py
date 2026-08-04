@@ -20,7 +20,7 @@ from app.matching_engine.types import (
     StopSnapshot,
 )
 from app.models import AssignmentEvent, Driver, Guest, Location, Trip, TripGuest, TripStop
-from app.models.enums import AssignmentSource, StopType, TripStatus, TripType
+from app.models.enums import AssignmentSource, DriverStatus, StopType, TripStatus, TripType
 from app.realtime import location_store
 from app.realtime.reopt_service import notify_match
 from app.redis_client import get_redis
@@ -29,6 +29,22 @@ from app.schemas import TripRead
 from app.services import trip_service
 
 _engine = DispatchMatchingEngine()
+
+ACTIVE_GUEST_TRIP = {
+    TripStatus.planned,
+    TripStatus.offered,
+    TripStatus.accepted,
+    TripStatus.en_route,
+    TripStatus.at_pickup,
+    TripStatus.in_progress,
+}
+
+COMPETING_OFFER_STATUSES = {
+    TripStatus.planned,
+    TripStatus.offered,
+    TripStatus.accepted,
+    TripStatus.en_route,
+}
 
 
 class MatchingEngineUnavailable(HTTPException):
@@ -183,6 +199,66 @@ def _source_enum(source: str) -> AssignmentSource:
     return mapping.get(source, AssignmentSource.greedy)
 
 
+def guest_active_trips(db: Session, guest_id: UUID) -> list[Trip]:
+    return (
+        db.query(Trip)
+        .join(TripGuest, TripGuest.trip_id == Trip.id)
+        .filter(TripGuest.guest_id == guest_id, Trip.status.in_(ACTIVE_GUEST_TRIP))
+        .order_by(Trip.created_at.desc())
+        .all()
+    )
+
+
+def cancel_competing_trips_for_guests(
+    db: Session,
+    *,
+    guest_ids: list[UUID],
+    keep_trip_id: UUID,
+) -> int:
+    """
+    When one driver accepts, drop other offers for the same guests so the guest
+    app never shows a second rider.
+    """
+    if not guest_ids:
+        return 0
+    rows = (
+        db.query(Trip)
+        .join(TripGuest, TripGuest.trip_id == Trip.id)
+        .options(joinedload(Trip.driver))
+        .filter(
+            TripGuest.guest_id.in_(guest_ids),
+            Trip.id != keep_trip_id,
+            Trip.status.in_(COMPETING_OFFER_STATUSES),
+        )
+        .all()
+    )
+    seen: set[UUID] = set()
+    cancelled = 0
+    for trip in rows:
+        if trip.id in seen:
+            continue
+        seen.add(trip.id)
+        trip.status = TripStatus.cancelled
+        note = f"superseded_by_accept:{keep_trip_id}"
+        trip.notes = f"{trip.notes + '; ' if trip.notes else ''}{note}"
+        trip.route_version += 1
+        if trip.driver_id:
+            still_busy = (
+                db.query(Trip)
+                .filter(
+                    Trip.driver_id == trip.driver_id,
+                    Trip.id != trip.id,
+                    Trip.status.in_(ACTIVE_GUEST_TRIP),
+                )
+                .first()
+            )
+            if not still_busy and trip.driver:
+                trip.driver.status = DriverStatus.available
+                trip.driver.break_until = None
+        cancelled += 1
+    return cancelled
+
+
 def apply_proposed_trip(db: Session, proposal: ProposedTrip) -> Trip:
     if proposal.existing_trip_id is not None:
         trip = db.query(Trip).filter(Trip.id == proposal.existing_trip_id).first()
@@ -325,6 +401,12 @@ def match_guest(db: Session, guest_id: UUID) -> list[TripRead]:
     guest = db.query(Guest).filter(Guest.id == guest_id).first()
     if not guest:
         raise HTTPException(status_code=404, detail="Guest not found")
+
+    # Do not create a second offer while the guest already has an active ride
+    existing = guest_active_trips(db, guest_id)
+    if existing:
+        return [trip_service.get_trip(db, t.id) for t in existing]
+
     snap = _guest_snap(guest)
     try:
         result = _engine.match_one(snap, _driver_snaps(db), _loc_map(db), now=_tz_now())

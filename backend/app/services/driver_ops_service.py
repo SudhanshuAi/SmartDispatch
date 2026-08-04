@@ -153,6 +153,13 @@ def accept_trip(db: Session, driver_id: UUID) -> DriverTripView:
     driver.status = DriverStatus.en_route
     # Move to en_route immediately for ops visibility
     trip.status = TripStatus.en_route
+
+    # One accepted ride per guest: cancel other offers so guest app never shows a 2nd rider
+    guest_ids = [tg.guest_id for tg in trip.trip_guests]
+    matching_service.cancel_competing_trips_for_guests(
+        db, guest_ids=guest_ids, keep_trip_id=trip.id
+    )
+
     db.commit()
     return get_current_trip(db, driver_id)  # type: ignore[return-value]
 
