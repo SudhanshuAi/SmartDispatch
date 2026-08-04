@@ -127,9 +127,9 @@ def run_batch(
             model.Add(sum(seat_terms) <= drv.seat_capacity)
             model.Add(sum(lug_terms) <= drv.luggage_capacity)
 
-    # Objective: minimize cost + penalty for unassigned
-    # Soft bonus: cluster same-destination guests onto the same vehicle
+    # Soft bonus: cluster same-destination guests (skip on large instances — too many vars)
     SAME_DEST_BONUS = 180
+    SAME_DEST_MAX_GUESTS = 40
     UNASSIGNED_PENALTY = 1_000_000
     obj_terms = []
     for gi in range(n_g):
@@ -139,30 +139,32 @@ def run_batch(
                 obj_terms.append(x[gi, di] * cost[gi][di])
                 assigned.append(x[gi, di])
         if assigned:
-            # 1 - sum(assigned) approx via penalty
             u = model.NewBoolVar(f"u_{gi}")
             model.Add(sum(assigned) + u == 1)
             obj_terms.append(u * UNASSIGNED_PENALTY)
         else:
             obj_terms.append(UNASSIGNED_PENALTY)
 
-    for gi, g in enumerate(matchable):
-        for gj in range(gi + 1, n_g):
-            g2 = matchable[gj]
-            if g.drop_location_id != g2.drop_location_id:
-                continue
-            for di in range(n_d):
-                if (gi, di) not in x or (gj, di) not in x:
+    if n_g <= SAME_DEST_MAX_GUESTS:
+        for gi, g in enumerate(matchable):
+            for gj in range(gi + 1, n_g):
+                g2 = matchable[gj]
+                if g.drop_location_id != g2.drop_location_id:
                     continue
-                both = model.NewBoolVar(f"same_dest_{gi}_{gj}_{di}")
-                model.AddBoolAnd([x[gi, di], x[gj, di]]).OnlyEnforceIf(both)
-                model.AddBoolOr([x[gi, di].Not(), x[gj, di].Not(), both])
-                obj_terms.append(both * -SAME_DEST_BONUS)
+                for di in range(n_d):
+                    if (gi, di) not in x or (gj, di) not in x:
+                        continue
+                    both = model.NewBoolVar(f"same_dest_{gi}_{gj}_{di}")
+                    model.AddBoolAnd([x[gi, di], x[gj, di]]).OnlyEnforceIf(both)
+                    model.AddBoolOr([x[gi, di].Not(), x[gj, di].Not(), both])
+                    obj_terms.append(both * -SAME_DEST_BONUS)
 
     model.Minimize(sum(obj_terms))
 
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = time_limit_seconds
+    # Large fleets need more time; small demos stay snappy
+    limit = time_limit_seconds if n_g <= 40 else max(time_limit_seconds, 20.0)
+    solver.parameters.max_time_in_seconds = limit
     status = solver.Solve(model)
 
     trips: list[ProposedTrip] = []

@@ -59,3 +59,9 @@ def process_queue(
 ) -> dict:
     """Pop highest-priority queue item and run match_one."""
     return matching_service.process_queue_once(db)
+
+
+@router.post("/queue/clear")
+def clear_queue(_: AuthContext = Depends(require_admin)) -> dict:
+    """Drop all queue entries (use after re-seed when Redis still has old guest IDs)."""
+    return matching_service.clear_match_queue()

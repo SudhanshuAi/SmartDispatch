@@ -28,8 +28,15 @@ export function DashboardPage() {
 
   async function runBatch() {
     try {
-      const r = (await api.runBatch()) as { trips_created: number; unmatched: unknown[] };
-      setMsg(`Batch complete: ${r.trips_created} trips, ${r.unmatched?.length ?? 0} unmatched.`);
+      const r = (await api.runBatch()) as {
+        trips_created: number;
+        unmatched: unknown[];
+        queue_depth?: number;
+      };
+      setMsg(
+        `Pre-day batch: ${r.trips_created} trips created, ${r.unmatched?.length ?? 0} unmatched` +
+          (r.queue_depth != null ? ` (queue now ${r.queue_depth}).` : "."),
+      );
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Batch failed");
@@ -39,14 +46,32 @@ export function DashboardPage() {
   async function drainQueue() {
     try {
       const r = await api.processQueue();
-      setMsg(
-        r.processed
-          ? `Queue processed one guest (${r.reason ?? "ok"}).`
-          : `Queue idle: ${r.reason ?? "empty"}.`,
-      );
+      if (r.processed) {
+        setMsg(
+          `Queue: matched 1 guest` +
+            (r.skipped_stale ? ` (skipped ${r.skipped_stale} stale)` : "") +
+            (r.queue_depth != null ? ` · depth ${r.queue_depth}` : ""),
+        );
+      } else {
+        setMsg(
+          `Queue: ${r.reason ?? "idle"}` +
+            (r.skipped_stale ? ` · removed ${r.skipped_stale} stale IDs` : "") +
+            (r.queue_depth != null ? ` · depth ${r.queue_depth}` : ""),
+        );
+      }
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Queue process failed");
+    }
+  }
+
+  async function clearQueue() {
+    try {
+      const r = await api.clearQueue();
+      setMsg(`Cleared ${r.cleared} queue entries. Depth now ${r.queue_depth}.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Clear queue failed");
     }
   }
 
@@ -65,10 +90,21 @@ export function DashboardPage() {
           <button className="btn" onClick={load}>
             Refresh
           </button>
-          <button className="btn" onClick={drainQueue}>
+          <button className="btn" onClick={drainQueue} title="Match next priority guest in Redis queue">
             Process queue {queueDepth != null ? `(${queueDepth})` : ""}
           </button>
-          <button className="btn primary" onClick={runBatch}>
+          <button
+            className="btn"
+            onClick={clearQueue}
+            title="Remove stale queue IDs (after re-seed)"
+          >
+            Clear queue
+          </button>
+          <button
+            className="btn primary"
+            onClick={runBatch}
+            title="OR-Tools batch assign guests with known arrival times"
+          >
             Run pre-day batch
           </button>
         </div>

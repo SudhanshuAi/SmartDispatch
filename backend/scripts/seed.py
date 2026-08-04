@@ -151,6 +151,13 @@ def seed(db: Session, *, reset: bool = True) -> None:
     random.seed(42)
     if reset:
         _wipe(db)
+        # Postgres wipe does not clear Redis match queue — drop stale guest IDs
+        try:
+            from app.services.matching_service import clear_match_queue
+
+            clear_match_queue()
+        except Exception:
+            pass
 
     # Admin
     admin = User(

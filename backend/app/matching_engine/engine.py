@@ -16,8 +16,10 @@ class DispatchMatchingEngine:
     def match_one(self, guest, drivers, locations, *, now, trip_type="arrival"):  # noqa: ANN001
         return match_one(guest, drivers, locations, now=now, travel=self.travel, trip_type=trip_type)
 
-    def run_batch(self, guests, drivers, locations, *, now, trip_type="arrival"):  # noqa: ANN001
-        return run_batch(guests, drivers, locations, now=now, travel=self.travel, trip_type=trip_type)
+    def run_batch(self, guests, drivers, locations, *, now, trip_type="arrival", **kwargs):  # noqa: ANN001
+        return run_batch(
+            guests, drivers, locations, now=now, travel=self.travel, trip_type=trip_type, **kwargs
+        )
 
     def try_detour(self, driver, guest, locations, *, now):  # noqa: ANN001
         return try_detour(driver, guest, locations, now=now, travel=self.travel)

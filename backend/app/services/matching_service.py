@@ -349,25 +349,62 @@ def run_batch_assignment(db: Session, *, limit: int | None = None) -> dict:
     if limit is not None:
         q = q.limit(limit)
     guests = q.all()
+    # Skip guests who already have an active trip
+    busy = {
+        tg.guest_id
+        for tg in db.query(TripGuest)
+        .join(Trip, Trip.id == TripGuest.trip_id)
+        .filter(
+            Trip.status.in_(
+                [
+                    TripStatus.offered,
+                    TripStatus.accepted,
+                    TripStatus.en_route,
+                    TripStatus.at_pickup,
+                    TripStatus.in_progress,
+                ]
+            )
+        )
+        .all()
+    }
     snaps = []
     for g in guests:
+        if g.id in busy:
+            continue
         try:
             snaps.append(_guest_snap(g))
         except HTTPException:
             continue
-    # Fresh travel cache per batch run (planning TTL)
+    if not snaps:
+        return {
+            "trips_created": 0,
+            "trip_ids": [],
+            "unmatched": [],
+            "queue_depth": len(get_match_queue()),
+            "note": "No unassigned guests with travel_eta",
+        }
+
     from app.matching_engine.routing import CachedTravelProvider
 
+    # Plan as-of shortly before the first arrival so deadlines are still open
+    earliest = min(s.ready_at for s in snaps)
+    planning_now = earliest - timedelta(minutes=30)
     engine = DispatchMatchingEngine(travel=CachedTravelProvider(traffic_mode=False))
     try:
-        result = engine.run_batch(snaps, _driver_snaps(db), _loc_map(db), now=_tz_now())
+        result = engine.run_batch(
+            snaps,
+            _driver_snaps(db),
+            _loc_map(db),
+            now=planning_now,
+            time_limit_seconds=20.0,
+        )
     except Exception as exc:
         raise MatchingEngineUnavailable(f"Batch matching failed: {exc}") from exc
+
     created = []
     for proposal in result.trips:
         trip = apply_proposed_trip(db, proposal)
         created.append(str(trip.id))
-    # Enqueue unmatched into priority queue
     now = _tz_now()
     for u in result.unmatched:
         g = db.query(Guest).filter(Guest.id == u.guest_id).first()
@@ -387,12 +424,16 @@ def run_batch_assignment(db: Session, *, limit: int | None = None) -> dict:
             ),
             now=now,
         )
-    q = get_match_queue()
+    mq = get_match_queue()
     return {
         "trips_created": len(created),
         "trip_ids": created,
-        "unmatched": [{"guest_id": str(u.guest_id), "reason": u.reason.value, "detail": u.detail} for u in result.unmatched],
-        "queue_depth": len(q),
+        "unmatched": [
+            {"guest_id": str(u.guest_id), "reason": u.reason.value, "detail": u.detail}
+            for u in result.unmatched
+        ],
+        "queue_depth": len(mq),
+        "planning_now": planning_now.isoformat(),
     }
 
 
@@ -426,15 +467,56 @@ def enqueue_ride_request(
 
 
 def process_queue_once(db: Session) -> dict:
+    """Pop next queue item and match. Drops stale IDs left after re-seed."""
     now = _tz_now()
     q = get_match_queue()
-    item = q.pop_next(now=now)
-    if item is None:
-        return {"processed": False, "reason": "empty"}
-    try:
-        trips = match_guest(db, item.guest_id)
-        return {"processed": True, "guest_id": str(item.guest_id), "trips": [str(t.id) for t in trips]}
-    except HTTPException as exc:
-        # Requeue on failure so guest is not dropped
-        q.requeue(item, now=now)
-        return {"processed": False, "guest_id": str(item.guest_id), "reason": exc.detail, "requeued": True}
+    skipped_stale = 0
+    for _ in range(50):  # skip a burst of dead Redis entries from old seeds
+        item = q.pop_next(now=now)
+        if item is None:
+            return {
+                "processed": False,
+                "reason": "empty" if skipped_stale == 0 else "stale_cleared",
+                "skipped_stale": skipped_stale,
+                "queue_depth": len(q),
+            }
+        guest = db.query(Guest).filter(Guest.id == item.guest_id).first()
+        if not guest:
+            skipped_stale += 1
+            continue  # do not requeue missing guests
+        try:
+            trips = match_guest(db, item.guest_id)
+            return {
+                "processed": True,
+                "guest_id": str(item.guest_id),
+                "trips": [str(t.id) for t in trips],
+                "skipped_stale": skipped_stale,
+                "queue_depth": len(q),
+            }
+        except HTTPException as exc:
+            detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+            # Permanent failures: drop. Transient: requeue.
+            if detail in {"Guest not found", "Guest missing pickup or accommodation"}:
+                skipped_stale += 1
+                continue
+            q.requeue(item, now=now)
+            return {
+                "processed": False,
+                "guest_id": str(item.guest_id),
+                "reason": detail,
+                "requeued": True,
+                "skipped_stale": skipped_stale,
+                "queue_depth": len(q),
+            }
+    return {
+        "processed": False,
+        "reason": "too_many_stale",
+        "skipped_stale": skipped_stale,
+        "queue_depth": len(q),
+    }
+
+
+def clear_match_queue() -> dict:
+    q = get_match_queue()
+    n = q.clear() if hasattr(q, "clear") else 0
+    return {"cleared": n, "queue_depth": len(q)}

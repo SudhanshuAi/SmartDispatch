@@ -75,7 +75,15 @@ export const api = {
   forceMatch: (body: Record<string, unknown>) =>
     request("/admin/override/force-match", { method: "POST", body: JSON.stringify(body) }),
   runBatch: () => request("/admin/matching/batch", { method: "POST" }),
-  processQueue: () => request<{ processed: boolean; reason?: string }>("/admin/matching/queue/process", { method: "POST" }),
+  processQueue: () =>
+    request<{
+      processed: boolean;
+      reason?: string;
+      skipped_stale?: number;
+      queue_depth?: number;
+    }>("/admin/matching/queue/process", { method: "POST" }),
+  clearQueue: () =>
+    request<{ cleared: number; queue_depth: number }>("/admin/matching/queue/clear", { method: "POST" }),
   matchingStatus: () =>
     request<{ queue_depth: number; matching_engine_enabled: boolean }>("/admin/matching/status"),
 

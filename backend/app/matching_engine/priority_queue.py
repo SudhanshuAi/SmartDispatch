@@ -115,6 +115,12 @@ class InMemoryPriorityQueue:
         self._items.pop(request_id, None)
         self._scores.pop(request_id, None)
 
+    def clear(self) -> int:
+        n = len(self._items)
+        self._items.clear()
+        self._scores.clear()
+        return n
+
     def __len__(self) -> int:
         return len(self._items)
 
@@ -190,6 +196,13 @@ class RedisPriorityQueue:
     def remove(self, request_id: str) -> None:
         self._r.zrem(self.KEY, request_id)
         self._r.hdel(f"{self.KEY}:payload", request_id)
+
+    def clear(self) -> int:
+        n = self.__len__()
+        self._r.delete(self.KEY)
+        self._r.delete(f"{self.KEY}:payload")
+        self._payloads.clear()
+        return n
 
     def __len__(self) -> int:
         return int(self._r.zcard(self.KEY))
