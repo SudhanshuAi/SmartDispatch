@@ -2,7 +2,7 @@
 
 FastAPI API + matching engine + Postgres/Redis.
 
-Full stack setup lives in the repo root [`README.md`](../README.md).
+Full stack setup: root [`README.md`](../README.md). Deploy: [`DEPLOY.md`](../DEPLOY.md).
 
 ## Run
 
@@ -36,8 +36,9 @@ uvicorn app.main:app --reload --port 8000
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Postgres connection |
+| `DATABASE_URL` | Postgres (`postgresql+psycopg://…`) |
 | `REDIS_URL` | Redis (queue + realtime) |
+| `CORS_ORIGINS` | Comma-separated Admin/Guest origins |
 | `MATCHING_ENGINE_ENABLED` | `false` = engine down drill; trips/overrides still work |
 
-Auth stub: `X-Role: admin|driver|guest` plus `X-Driver-Id` / `X-Guest-Id` for scoped roles. Portal login: `POST /auth/login`.
+Auth stub: `X-Role: admin|driver|guest` plus `X-Driver-Id` / `X-Guest-Id`. Portal login: `POST /auth/login`.

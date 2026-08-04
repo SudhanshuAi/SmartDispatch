@@ -7,10 +7,13 @@ export function DashboardPage() {
   const [data, setData] = useState<DashboardSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [queueDepth, setQueueDepth] = useState<number | null>(null);
 
   async function load() {
     try {
-      setData(await api.dashboard());
+      const [dash, status] = await Promise.all([api.dashboard(), api.matchingStatus().catch(() => null)]);
+      setData(dash);
+      if (status) setQueueDepth(status.queue_depth);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
@@ -33,18 +36,37 @@ export function DashboardPage() {
     }
   }
 
+  async function drainQueue() {
+    try {
+      const r = await api.processQueue();
+      setMsg(
+        r.processed
+          ? `Queue processed one guest (${r.reason ?? "ok"}).`
+          : `Queue idle: ${r.reason ?? "empty"}.`,
+      );
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Queue process failed");
+    }
+  }
+
   const c = data?.counts;
+  const waiting = data?.guests.filter((g) => g.state === "waiting") ?? [];
+  const activeTrips = data?.active_trips ?? [];
 
   return (
     <div className="stack">
       <div className="page-head">
         <div>
           <h1>Ops dashboard</h1>
-          <p>Live fleet and guest states. Polls every 8s until WebSockets (M6).</p>
+          <p>Fleet, unmatched guests, and upcoming trips. Refreshes every 8s.</p>
         </div>
         <div className="row-actions">
           <button className="btn" onClick={load}>
             Refresh
+          </button>
+          <button className="btn" onClick={drainQueue}>
+            Process queue {queueDepth != null ? `(${queueDepth})` : ""}
           </button>
           <button className="btn primary" onClick={runBatch}>
             Run pre-day batch
@@ -61,7 +83,7 @@ export function DashboardPage() {
           </div>
         </div>
         <div className="stat">
-          <div className="label">Waiting</div>
+          <div className="label">Waiting / unmatched</div>
           <div className="value">{c?.guests_waiting ?? "—"}</div>
         </div>
         <div className="stat">
@@ -75,6 +97,96 @@ export function DashboardPage() {
         <div className="stat">
           <div className="label">Pending requests</div>
           <div className="value">{c?.pending_requests ?? "—"}</div>
+        </div>
+        <div className="stat">
+          <div className="label">Active trips</div>
+          <div className="value">{activeTrips.length}</div>
+        </div>
+      </div>
+
+      <div className="grid-2">
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Upcoming / active trips</h2>
+          </div>
+          <div className="scroll-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>ETA pickup</th>
+                  <th>Seats</th>
+                  <th>Guests</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeTrips.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="muted">
+                      No active trips. Approve a request or run batch.
+                    </td>
+                  </tr>
+                )}
+                {activeTrips.slice(0, 40).map((t) => (
+                  <tr key={t.id}>
+                    <td>{t.trip_type}</td>
+                    <td>
+                      <span className={`badge ${t.status}`}>{t.status}</span>
+                    </td>
+                    <td className="muted">
+                      {t.eta_pickup ? new Date(t.eta_pickup).toLocaleString() : "—"}
+                    </td>
+                    <td>
+                      {t.seats_used}s / {t.luggage_used}l
+                    </td>
+                    <td className="muted">{t.guest_ids?.length ?? 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Unmatched / waiting guests</h2>
+            <Link to="/admin/guests">Edit guests</Link>
+          </div>
+          <div className="scroll-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Party</th>
+                  <th>Travel ETA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {waiting.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="muted">
+                      No waiting guests.
+                    </td>
+                  </tr>
+                )}
+                {waiting.slice(0, 40).map(({ guest }) => (
+                  <tr key={guest.id}>
+                    <td>
+                      {guest.full_name}
+                      {guest.priority && <span className="badge">VIP</span>}
+                    </td>
+                    <td>
+                      {guest.party_size} / {guest.luggage_count}
+                    </td>
+                    <td className="muted">
+                      {guest.travel_eta ? new Date(guest.travel_eta).toLocaleString() : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -177,7 +289,7 @@ export function DashboardPage() {
               {(data?.pending_ride_requests.length ?? 0) === 0 && (
                 <tr>
                   <td colSpan={3} className="muted">
-                    No pending requests. Seed a few from Ride requests.
+                    No pending requests.
                   </td>
                 </tr>
               )}

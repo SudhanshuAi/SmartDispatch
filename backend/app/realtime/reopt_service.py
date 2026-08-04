@@ -167,25 +167,62 @@ def apply_live_eta_reopt(db: Session) -> dict:
     location_store.set_last_reopt_ts()
 
     refreshed = 0
+    rematched = 0
     for action in result.actions:
-        if action.action != "refresh_eta":
-            continue
         trip = next((t for t in trips if t.id == action.trip_id), None)
         if not trip:
             continue
-        if action.new_eta_pickup is not None:
-            trip.eta_pickup = action.new_eta_pickup
-        if action.new_eta_drop is not None:
-            trip.eta_drop = action.new_eta_drop
-        trip.route_version += 1
-        refreshed += 1
-        guest_ids = [tg.guest_id for tg in trip.trip_guests]
-        notify_eta_update(trip, guest_ids, reason=action.reason or "reopt")
+        if action.action == "refresh_eta":
+            if action.new_eta_pickup is not None:
+                trip.eta_pickup = action.new_eta_pickup
+            if action.new_eta_drop is not None:
+                trip.eta_drop = action.new_eta_drop
+            trip.route_version += 1
+            refreshed += 1
+            guest_ids = [tg.guest_id for tg in trip.trip_guests]
+            notify_eta_update(trip, guest_ids, reason=action.reason or "reopt")
+        elif action.action == "rematch":
+            # Lazy import avoids circular dependency with matching_service
+            from app.models import AssignmentEvent
+            from app.models.enums import AssignmentSource, DriverStatus
+            from app.services import matching_service
+
+            guest_ids = [tg.guest_id for tg in list(trip.trip_guests)]
+            trip.status = TripStatus.cancelled
+            trip.notes = f"reopt rematch; {action.reason or ''}".strip()
+            trip.route_version += 1
+            if trip.driver:
+                trip.driver.status = DriverStatus.available
+            for gid in guest_ids:
+                try:
+                    matching_service.enqueue_ride_request(
+                        db, request_id=f"reopt-{gid}", guest_id=gid
+                    )
+                    matching_service.match_guest(db, gid)
+                except Exception as exc:  # noqa: BLE001 — keep other trips moving
+                    logger.warning("reopt rematch failed for guest %s: %s", gid, exc)
+            db.add(
+                AssignmentEvent(
+                    trip_id=trip.id,
+                    driver_id=trip.driver_id,
+                    source=AssignmentSource.greedy,
+                    detail=action.reason or "reopt_rematch",
+                )
+            )
+            rematched += 1
+            notify(
+                kind="status",
+                title="Trip reassigned",
+                body="Traffic risk — finding another vehicle",
+                audience=[("guest", g) for g in guest_ids],
+                data={"trip_id": str(trip.id), "action": "rematch", "reason": action.reason},
+            )
 
     db.commit()
     return {
         "actions": len(result.actions),
         "refreshed": refreshed,
+        "rematched": rematched,
         "matrix_calls": result.matrix_calls,
         "cache_hits": result.cache_hits,
     }

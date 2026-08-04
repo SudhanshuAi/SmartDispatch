@@ -11,6 +11,7 @@ import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { LiveTripMap } from "../components/LiveTripMap";
 import type { GuestLocation, GuestMatch, GuestMe, RideRequest } from "../types";
+import { registerGuestPush } from "../push";
 
 type Tab = "home" | "ride" | "request";
 
@@ -91,6 +92,10 @@ export function HomeScreen() {
     const id = setInterval(() => void refresh(), 6000);
     return () => clearInterval(id);
   }, [refresh]);
+
+  useEffect(() => {
+    if (user) void registerGuestPush(user);
+  }, [user]);
 
   const pending = requests.find((r) => r.status === "pending_admin");
 

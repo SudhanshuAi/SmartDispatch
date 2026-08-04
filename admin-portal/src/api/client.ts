@@ -75,6 +75,9 @@ export const api = {
   forceMatch: (body: Record<string, unknown>) =>
     request("/admin/override/force-match", { method: "POST", body: JSON.stringify(body) }),
   runBatch: () => request("/admin/matching/batch", { method: "POST" }),
+  processQueue: () => request<{ processed: boolean; reason?: string }>("/admin/matching/queue/process", { method: "POST" }),
+  matchingStatus: () =>
+    request<{ queue_depth: number; matching_engine_enabled: boolean }>("/admin/matching/status"),
 
   driverMe: () => request<DriverMe>("/driver/me"),
   driverTrip: async () => {

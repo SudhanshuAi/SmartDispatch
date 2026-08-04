@@ -130,14 +130,26 @@ Approved ride requests that cannot match are **queued** for later rematch rather
 
 ---
 
-## 6. Simplifications (out of scope / demo)
+## 6. Simplifications (honest trade-offs)
 
 - **No payments**, public marketplace, or multi-tenant events.
 - **Auth stub** instead of production JWT/OIDC (headers mirror future claims).
-- **Travel times** mocked/cached rather than mandatory live Google Distance Matrix (hook present).
-- **Push:** Expo HTTP + Redis log; full background push UX is optional for demo.
-- **Web map** in Guest app falls back to coordinates (`react-native-maps` is native-only).
+- **Travel times:** cached haversine by default; `CachedTravelProvider` accepts a Maps Distance Matrix `fetcher` when a key is configured — not required for the assignment demo.
+- **Push:** guests register Expo push tokens on device; backend delivers via Expo HTTP. Web guest relies on in-app flash + poll.
+- **Guest web map:** OpenStreetMap embed (`LiveTripMap.web.tsx`); native uses `react-native-maps`.
 - Single-event seed (~25 drivers / ~150 guests); peak script scales to 100×250 without DB.
+
+### Closed vs earlier gaps
+
+| Gap | Resolution |
+| --- | --- |
+| Same-destination clustering | Soft CP-SAT bonus when guests share a drop and the same driver |
+| Reopt rematch not applied | `apply_live_eta_reopt` cancels + requeues/rematches on `rematch` actions |
+| No queue worker | Background `queue_drain_loop` drains priority queue every ~12s |
+| Admin unmatched / upcoming trips | Dashboard panels for waiting guests + active trips |
+| Attendance UI | Guests page attendance select |
+| Guest web map | OSM embed on web |
+| Push registration | Guest app registers Expo token when permitted |
 
 ---
 

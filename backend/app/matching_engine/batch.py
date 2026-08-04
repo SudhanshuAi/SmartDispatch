@@ -96,7 +96,6 @@ def run_batch(
             wait = int((pickup_eta - g.ready_at).total_seconds())
             travel_cost = to_pickup + trip_secs
             vip = -200 if g.priority else 0
-            # Prefer same-destination clustering via soft bonus later in packing
             cost[gi][di] = max(0, wait + travel_cost + vip)
             feasible[gi][di] = True
 
@@ -129,6 +128,8 @@ def run_batch(
             model.Add(sum(lug_terms) <= drv.luggage_capacity)
 
     # Objective: minimize cost + penalty for unassigned
+    # Soft bonus: cluster same-destination guests onto the same vehicle
+    SAME_DEST_BONUS = 180
     UNASSIGNED_PENALTY = 1_000_000
     obj_terms = []
     for gi in range(n_g):
@@ -144,6 +145,20 @@ def run_batch(
             obj_terms.append(u * UNASSIGNED_PENALTY)
         else:
             obj_terms.append(UNASSIGNED_PENALTY)
+
+    for gi, g in enumerate(matchable):
+        for gj in range(gi + 1, n_g):
+            g2 = matchable[gj]
+            if g.drop_location_id != g2.drop_location_id:
+                continue
+            for di in range(n_d):
+                if (gi, di) not in x or (gj, di) not in x:
+                    continue
+                both = model.NewBoolVar(f"same_dest_{gi}_{gj}_{di}")
+                model.AddBoolAnd([x[gi, di], x[gj, di]]).OnlyEnforceIf(both)
+                model.AddBoolOr([x[gi, di].Not(), x[gj, di].Not(), both])
+                obj_terms.append(both * -SAME_DEST_BONUS)
+
     model.Minimize(sum(obj_terms))
 
     solver = cp_model.CpSolver()

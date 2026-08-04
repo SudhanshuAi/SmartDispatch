@@ -2,7 +2,7 @@
 
 Expo (React Native) client for **guests only** — separate from the Admin Portal.
 
-Full stack setup lives in the repo root [`README.md`](../README.md).
+Full stack: root [`README.md`](../README.md). Deploy: [`DEPLOY.md`](../DEPLOY.md).
 
 ## Run
 
@@ -20,9 +20,10 @@ Login: `guest001@smartdispatch.local` (**Priya Kapoor** after seed)
 ## Features
 
 - Pickup details (travel ETA, pickup point, accommodation)
-- Passive match view (driver name, plate, ETA) — no browsing/choosing drivers
-- Live tracking (map on native; ETA/coords fallback on web)
+- Auto match view (driver name, plate, ETA) — no browsing/choosing drivers
+- Live tracking: native map + OpenStreetMap embed on web
 - On-demand ride request → pending until admin approves
+- Expo push token registration on device (when permitted)
 
 ## Env
 

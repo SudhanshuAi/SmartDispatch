@@ -56,4 +56,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  registerPushToken: (user: AuthUser, token: string) =>
+    request<{ ok: boolean }>("/guest/push-token", user, {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
 };

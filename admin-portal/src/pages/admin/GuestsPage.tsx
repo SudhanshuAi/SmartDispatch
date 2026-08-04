@@ -219,6 +219,20 @@ export function GuestsPage() {
                   <option value="yes">yes</option>
                 </select>
               </label>
+              <label>
+                Attendance
+                <select
+                  value={selected.attendance_status ?? "expected"}
+                  onChange={(e) =>
+                    setSelected({ ...selected, attendance_status: e.target.value })
+                  }
+                >
+                  <option value="expected">expected</option>
+                  <option value="checked_in">checked_in</option>
+                  <option value="no_show">no_show</option>
+                  <option value="cancelled">cancelled</option>
+                </select>
+              </label>
               <div style={{ display: "flex", alignItems: "end" }}>
                 <button className="btn primary" type="submit">
                   Save correction
@@ -307,6 +321,7 @@ export function GuestsPage() {
                 <th>Name</th>
                 <th>Travel</th>
                 <th>Pickup → Hotel</th>
+                <th>Attendance</th>
                 <th>Party</th>
               </tr>
             </thead>
@@ -324,6 +339,9 @@ export function GuestsPage() {
                   </td>
                   <td>
                     {locName(g.pickup_location_id)} → {locName(g.accommodation_id)}
+                  </td>
+                  <td>
+                    <span className="badge">{g.attendance_status}</span>
                   </td>
                   <td>
                     {g.party_size} / {g.luggage_count}

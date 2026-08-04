@@ -2,11 +2,11 @@
 
 React + TypeScript + Vite app for **Admin/Operations** and **Driver** roles (one codebase, role-gated shells).
 
-Full stack setup lives in the repo root [`README.md`](../README.md).
+Full stack: root [`README.md`](../README.md). Deploy: [`DEPLOY.md`](../DEPLOY.md).
 
 ## Run
 
-Prerequisites: backend API on `http://127.0.0.1:8000` (see root README).
+Prerequisites: backend API on `http://127.0.0.1:8000`.
 
 ```bash
 cd admin-portal
@@ -36,3 +36,5 @@ Guest emails are rejected here; use the Guest app (`guest001@…` → **Priya Ka
 npm run dev      # Vite dev server
 npm run build    # production build
 ```
+
+Production needs `admin-portal/vercel.json` (SPA rewrite for `/login`).
