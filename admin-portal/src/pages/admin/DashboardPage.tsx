@@ -126,7 +126,7 @@ export function DashboardPage() {
           </div>
         </div>
         <div className="stat">
-          <div className="label">Waiting / unmatched</div>
+          <div className="label">Waiting</div>
           <div className="value">{c?.guests_waiting ?? "—"}</div>
         </div>
         <div className="stat">
@@ -138,7 +138,7 @@ export function DashboardPage() {
           <div className="value">{c?.guests_in_transit ?? "—"}</div>
         </div>
         <div className="stat">
-          <div className="label">Pending requests</div>
+          <div className="label">Pending</div>
           <div className="value">{c?.pending_requests ?? "—"}</div>
         </div>
         <div className="stat">
