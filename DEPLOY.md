@@ -139,7 +139,10 @@ Cold start on free Render is normal after idle.
 | Build | `npm run build` |
 | Output | `dist` |
 
-3. Env: `VITE_API_BASE` = `https://YOUR-API` (no trailing slash).
+Include `admin-portal/vercel.json` (SPA rewrite) so routes like `/login` don’t 404 on refresh.
+
+3. Env: `VITE_API_BASE` = `https://YOUR-API` (no trailing slash).  
+   Rebuild after setting it — Vite bakes this in at build time.
 4. Deploy → add Admin URL to API `CORS_ORIGINS` → redeploy API.
 5. Login: `admin@smartdispatch.local` / driver: `driver01@smartdispatch.local`.
 
