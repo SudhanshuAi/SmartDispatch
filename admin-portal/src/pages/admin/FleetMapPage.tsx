@@ -34,7 +34,7 @@ function mapDisplayStatus(driverStatus: string, trip: Trip | null): string {
   return driverStatus;
 }
 
-function markerIcon(status: string, *, active: boolean) {
+function markerIcon(status: string, active: boolean) {
   const color = statusColor[status] ?? "#8fa3b8";
   const size = active ? 18 : 14;
   const ring = active ? 3 : 2;
@@ -169,7 +169,7 @@ export function FleetMapPage() {
             <Marker
               key={`${m.id}-${m.status}-${m.lat.toFixed(4)}-${m.lng.toFixed(4)}`}
               position={[m.lat, m.lng]}
-              icon={markerIcon(m.status, { active: m.active })}
+              icon={markerIcon(m.status, m.active)}
               zIndexOffset={m.active ? 1000 : 0}
             >
               <Popup>
