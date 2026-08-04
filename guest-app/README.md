@@ -15,7 +15,7 @@ copy .env.example .env    # optional
 npx expo start --web
 ```
 
-Login: `guest001@smartdispatch.local`
+Login: `guest001@smartdispatch.local` (**Priya Kapoor** after seed)
 
 ## Features
 

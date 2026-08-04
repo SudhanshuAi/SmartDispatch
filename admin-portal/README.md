@@ -17,12 +17,12 @@ npm run dev
 
 Open http://localhost:5173
 
-| Email | Role |
-| --- | --- |
-| `admin@smartdispatch.local` | Dashboard, fleet map, ride requests, onboarding, overrides |
-| `driver01@smartdispatch.local` | Own trip only — accept/reject, status, live GPS, break |
+| Email | Role | Seed name |
+| --- | --- | --- |
+| `admin@smartdispatch.local` | Dashboard, fleet map, ride requests, onboarding, overrides | Ops Admin |
+| `driver01@smartdispatch.local` | Own trip only — accept/reject, status, live GPS, break | **Ravi Menon** (DL-1C-1000) |
 
-Guest emails are rejected here; use the Guest app.
+Guest emails are rejected here; use the Guest app (`guest001@…` → **Priya Kapoor**).
 
 ## Env
 

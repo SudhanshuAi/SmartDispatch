@@ -144,7 +144,7 @@ Include `admin-portal/vercel.json` (SPA rewrite) so routes like `/login` don’t
 3. Env: `VITE_API_BASE` = `https://YOUR-API` (no trailing slash).  
    Rebuild after setting it — Vite bakes this in at build time.
 4. Deploy → add Admin URL to API `CORS_ORIGINS` → redeploy API.
-5. Login: `admin@smartdispatch.local` / driver: `driver01@smartdispatch.local`.
+5. Login: `admin@smartdispatch.local` (Ops Admin) / driver: `driver01@…` (**Ravi Menon**).
 
 ---
 
@@ -159,7 +159,7 @@ npx expo export --platform web
 
 Or Vercel project: Root `guest-app`, build `npx expo export --platform web`, output `dist`, env `EXPO_PUBLIC_API_BASE`.
 
-Add Guest URL to `CORS_ORIGINS`. Login: `guest001@smartdispatch.local`.
+Add Guest URL to `CORS_ORIGINS`. Login: `guest001@smartdispatch.local` (**Priya Kapoor**).
 
 Phone: same `EXPO_PUBLIC_API_BASE` + `npx expo start` → Expo Go.
 

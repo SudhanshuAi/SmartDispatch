@@ -98,15 +98,32 @@ VEHICLE_PROFILES = [
     (14, 10, "Mini Bus"),
 ]
 
-FIRST_NAMES = [
+# Disjoint pools so guest ↔ driver names never collide in demos
+# (shared first+last previously made "Aarav Sharma" both a guest and a driver).
+DRIVER_FIRST = [
+    "Ravi", "Suresh", "Imran", "Deepak", "Harish", "Naveen", "Yusuf", "Balaji",
+    "Farhan", "Gopal", "Jatin", "Karan", "Lalit", "Mohan", "Omkar", "Prakash",
+    "Qadir", "Ramesh", "Sanjay", "Tushar", "Umesh", "Varun", "Wasim", "Yogesh",
+    "Zubin",
+]
+DRIVER_LAST = [
+    "Menon", "Pillai", "Shetty", "Bhat", "Kulkarni", "Deshmukh", "Naidu", "Hegde",
+    "Saxena", "Trivedi", "Aggarwal", "Bansal", "Chawla", "Dhingra", "Eapen",
+]
+
+GUEST_FIRST = [
     "Aarav", "Priya", "Rohan", "Ananya", "Vikram", "Neha", "Arjun", "Isha",
     "Kabir", "Meera", "Dev", "Sana", "Nikhil", "Pooja", "Rahul", "Diya",
     "Aditya", "Kavya", "Siddharth", "Riya", "Manish", "Shreya", "Kunal", "Tara",
 ]
-LAST_NAMES = [
+GUEST_LAST = [
     "Sharma", "Patel", "Singh", "Gupta", "Reddy", "Nair", "Khan", "Das",
     "Joshi", "Mehta", "Iyer", "Chopra", "Malhotra", "Banerjee", "Kapoor",
 ]
+
+# Fixed demo identities (emails stay guest001@ / driver01@)
+DEMO_DRIVER_NAME = "Ravi Menon"  # driver01@ — plate DL-1C-1000
+DEMO_GUEST_NAME = "Priya Kapoor"  # guest001@
 
 
 def _wipe(db: Session) -> None:
@@ -221,13 +238,17 @@ def seed(db: Session, *, reset: bool = True) -> None:
         db.add(vehicle)
         db.flush()
 
-        first = FIRST_NAMES[i % len(FIRST_NAMES)]
-        last = LAST_NAMES[(i * 3) % len(LAST_NAMES)]
+        if i == 0:
+            full_name = DEMO_DRIVER_NAME
+        else:
+            first = DRIVER_FIRST[i % len(DRIVER_FIRST)]
+            last = DRIVER_LAST[(i * 3) % len(DRIVER_LAST)]
+            full_name = f"{first} {last}"
         user = User(
             email=f"driver{i+1:02d}@smartdispatch.local",
             role=UserRole.driver,
             password_hash=hash_password("driver"),
-            full_name=f"{first} {last}",
+            full_name=full_name,
             phone=f"+91987654{i:04d}",
         )
         db.add(user)
@@ -266,13 +287,17 @@ def seed(db: Session, *, reset: bool = True) -> None:
         mode = "flight" if pickup is airport else "train"
         ref = f"{'AI' if mode == 'flight' else 'NR'}{100 + (i % 80)}"
 
-        first = FIRST_NAMES[(i * 5) % len(FIRST_NAMES)]
-        last = LAST_NAMES[(i * 7) % len(LAST_NAMES)]
+        if i == 0:
+            full_name = DEMO_GUEST_NAME
+        else:
+            first = GUEST_FIRST[(i * 5) % len(GUEST_FIRST)]
+            last = GUEST_LAST[(i * 7) % len(GUEST_LAST)]
+            full_name = f"{first} {last}"
         user = User(
             email=f"guest{i+1:03d}@smartdispatch.local",
             role=UserRole.guest,
             password_hash=hash_password("guest"),
-            full_name=f"{first} {last}",
+            full_name=full_name,
             phone=f"+91876543{i:04d}",
         )
         db.add(user)
@@ -295,7 +320,12 @@ def seed(db: Session, *, reset: bool = True) -> None:
     db.commit()
     print(
         f"Seeded: 1 admin, {len(LOCATIONS)} locations, {n_drivers} drivers/vehicles, "
-        f"{n_guests} guests, 4 schedule phases."
+        f"{n_guests} guests, 4 schedule phases.\n"
+        f"  Demo logins (password = role name):\n"
+        f"    admin@smartdispatch.local  → Ops Admin\n"
+        f"    driver01@…                 → {DEMO_DRIVER_NAME} (DL-1C-1000)\n"
+        f"    guest001@…                 → {DEMO_GUEST_NAME}\n"
+        f"  Driver names never overlap guest names (disjoint pools)."
     )
 
 
