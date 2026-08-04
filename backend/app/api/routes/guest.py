@@ -46,6 +46,7 @@ def match(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_guest),
 ) -> GuestMatchView | None:
+    """Returns null when the guest has no active trip (including after drop-off)."""
     return guest_ops_service.get_match(db, _guest_id(auth))
 
 

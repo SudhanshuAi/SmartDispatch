@@ -26,6 +26,9 @@ ACTIVE_TRIP = {
     TripStatus.in_progress,
 }
 
+# Explicitly never shown on Guest "Your ride"
+ENDED_TRIP = {TripStatus.completed, TripStatus.cancelled}
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -105,10 +108,12 @@ def _active_trip_for_guest(db: Session, guest_id: UUID) -> Trip | None:
 
 
 def get_match(db: Session, guest_id: UUID) -> GuestMatchView | None:
-    """Passive match payload — no driver browsing."""
+    """Passive match payload — no driver browsing. Completed/cancelled trips return None."""
     _get_guest(db, guest_id)
     trip = _active_trip_for_guest(db, guest_id)
     if not trip or not trip.driver:
+        return None
+    if trip.status in ENDED_TRIP:
         return None
     d = trip.driver
     from app.realtime import location_store

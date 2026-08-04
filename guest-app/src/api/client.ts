@@ -38,8 +38,27 @@ export const api = {
     request<AuthUser>("/auth/login", null, { method: "POST", body: JSON.stringify({ email }) }),
   me: (user: AuthUser) => request<GuestMe>("/guest/me", user),
   match: async (user: AuthUser) => {
-    const body = await request<GuestMatch | null>("/guest/match", user);
-    return body ?? null;
+    const res = await fetch(`${API_BASE}/guest/match`, {
+      headers: authHeaders(user),
+    });
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const body = await res.json();
+        detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail ?? body);
+      } catch {
+        /* ignore */
+      }
+      throw new Error(detail);
+    }
+    if (res.status === 204) return null;
+    const text = (await res.text()).trim();
+    if (!text || text === "null") return null;
+    const body = JSON.parse(text) as GuestMatch;
+    // Defense: never treat ended trips as an active ride
+    if (!body || body.matched === false) return null;
+    if (body.trip_status === "completed" || body.trip_status === "cancelled") return null;
+    return body;
   },
   locations: (user: AuthUser) => request<GuestLocation[]>("/guest/locations", user),
   rideRequests: (user: AuthUser) => request<RideRequest[]>("/guest/ride-requests", user),

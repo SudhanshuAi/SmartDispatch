@@ -53,39 +53,55 @@ export function HomeScreen() {
   const [destId, setDestId] = useState<string | null>(null);
   const prevMatched = useRef<string | null>(null);
 
+  const applyMatch = useCallback((mt: GuestMatch | null) => {
+    // Normalize: ended / missing match clears the Ride tab
+    const activeMatch =
+      mt && mt.trip_status !== "completed" && mt.trip_status !== "cancelled" ? mt : null;
+    setMatch(activeMatch);
+
+    // Passive in-app notification when a new match appears (no browsing/choosing)
+    if (activeMatch?.trip_id && prevMatched.current !== activeMatch.trip_id) {
+      if (prevMatched.current !== null || activeMatch.matched) {
+        setFlash(
+          `Matched · ${activeMatch.driver_name} · ${activeMatch.vehicle_number ?? "vehicle"} · ETA ${fmtEta(activeMatch.eta_pickup)}`,
+        );
+        setTab("ride");
+      }
+      prevMatched.current = activeMatch.trip_id;
+    } else if (!activeMatch) {
+      if (prevMatched.current !== null) {
+        setFlash("Ride completed — thanks for traveling with SmartDispatch.");
+        setTab("home");
+      }
+      prevMatched.current = null;
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     if (!user) return;
+    // Match is fetched alone so a failure elsewhere cannot leave a stale "Your ride"
     try {
-      const [m, mt, rr, locs] = await Promise.all([
+      const mt = await api.match(user);
+      applyMatch(mt);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load match");
+    }
+    try {
+      const [m, rr, locs] = await Promise.all([
         api.me(user),
-        api.match(user),
         api.rideRequests(user),
         api.locations(user),
       ]);
       setMe(m);
-      setMatch(mt);
       setRequests(rr);
       setLocations(locs);
       if (!originId && m.pickup) setOriginId(m.pickup.id);
       if (!destId && m.accommodation) setDestId(m.accommodation.id);
-
-      // Passive in-app notification when a new match appears (no browsing/choosing)
-      if (mt?.trip_id && prevMatched.current !== mt.trip_id) {
-        if (prevMatched.current !== null || mt.matched) {
-          setFlash(
-            `Matched · ${mt.driver_name} · ${mt.vehicle_number ?? "vehicle"} · ETA ${fmtEta(mt.eta_pickup)}`,
-          );
-          setTab("ride");
-        }
-        prevMatched.current = mt.trip_id;
-      } else if (!mt) {
-        prevMatched.current = null;
-      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     }
-  }, [user, originId, destId]);
+  }, [user, originId, destId, applyMatch]);
 
   useEffect(() => {
     void refresh();
@@ -187,11 +203,11 @@ export function HomeScreen() {
             <Text style={styles.h2}>Your ride</Text>
             {!match ? (
               <View style={styles.block}>
-                <Text style={styles.v}>Waiting for a match</Text>
+                <Text style={styles.v}>No active ride</Text>
                 <Text style={styles.muted}>
                   {pending
                     ? "Your on-demand request is pending admin approval. Matching starts after approval."
-                    : "When dispatch assigns a driver, details appear here automatically."}
+                    : "When dispatch assigns a driver, details appear here automatically. After drop-off, this screen clears."}
                 </Text>
               </View>
             ) : (
@@ -205,12 +221,12 @@ export function HomeScreen() {
                   ) : null}
                   <View style={styles.etaRow}>
                     <View>
-                      <Text style={styles.k}>Pickup ETA</Text>
+                      <Text style={styles.kOnDark}>Pickup ETA</Text>
                       <Text style={styles.etaBig}>{fmtEta(match.eta_pickup)}</Text>
                     </View>
                     <View>
-                      <Text style={styles.k}>Status</Text>
-                      <Text style={styles.v}>{match.trip_status}</Text>
+                      <Text style={styles.kOnDark}>Status</Text>
+                      <Text style={styles.statusOnDark}>{String(match.trip_status).replace(/_/g, " ")}</Text>
                     </View>
                   </View>
                 </View>
@@ -396,6 +412,8 @@ const styles = StyleSheet.create({
   matchPlate: { color: "#2bb3a3", fontSize: 20, fontWeight: "700", letterSpacing: 1 },
   etaRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 12 },
   etaBig: { color: "#fff", fontSize: 28, fontWeight: "800" },
+  kOnDark: { color: "#9ec9c2", fontSize: 12, fontWeight: "600", textTransform: "uppercase" },
+  statusOnDark: { color: "#fff", fontSize: 17, fontWeight: "700", textTransform: "capitalize" },
   pendingBox: {
     backgroundColor: "#fff7e8",
     borderColor: "#e6a23c",
