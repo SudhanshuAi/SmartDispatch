@@ -81,19 +81,25 @@ export function DashboardPage() {
 
   return (
     <div className="stack">
-      <div className="page-head">
+      <div className="dash-header">
         <div>
           <h1>Ops dashboard</h1>
           <p>Fleet, unmatched guests, and upcoming trips. Refreshes every 8s.</p>
         </div>
-        <div className="row-actions">
-          <button className="btn" onClick={load}>
+        <div className="dash-toolbar" role="toolbar" aria-label="Matching actions">
+          <button type="button" className="btn" onClick={load}>
             Refresh
           </button>
-          <button className="btn" onClick={drainQueue} title="Match next priority guest in Redis queue">
+          <button
+            type="button"
+            className="btn"
+            onClick={drainQueue}
+            title="Match next priority guest in Redis queue"
+          >
             Process queue {queueDepth != null ? `(${queueDepth})` : ""}
           </button>
           <button
+            type="button"
             className="btn"
             onClick={clearQueue}
             title="Remove stale queue IDs (after re-seed)"
@@ -101,6 +107,7 @@ export function DashboardPage() {
             Clear queue
           </button>
           <button
+            type="button"
             className="btn primary"
             onClick={runBatch}
             title="OR-Tools batch assign guests with known arrival times"
