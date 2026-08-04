@@ -5,6 +5,8 @@
 
 # Private brief — do not publish
 Assignment.md
+DEMO.md
+DEPLOY.md
 
 # ----- Secrets & local env (keep *.example) -----
 .env

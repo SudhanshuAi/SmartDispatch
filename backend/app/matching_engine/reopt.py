@@ -24,6 +24,9 @@ def plan_reopt(
     """
     Decide ETA refresh vs rematch for dirty / drifted trips.
     Does not call Maps per GPS tick — batches OD pairs and respects debounce.
+
+    Pickup ETA is only refreshed while pickup stops remain incomplete, and never
+    earlier than pickup_ready_at / current_eta_pickup (scheduled plan floor).
     """
     travel = travel or CachedTravelProvider(traffic_mode=True)
 
@@ -36,9 +39,8 @@ def plan_reopt(
         if elapsed < debounce_seconds and len(dirty) < DIRTY_COUNT_FLUSH:
             return ReoptResult(actions=(), matrix_calls=0, cache_hits=0)
 
-    # Batch all consecutive stop pairs across dirty trips
     pairs: list[tuple[GeoPoint, GeoPoint]] = []
-    meta: list[tuple[ReoptTripInput, list[int]]] = []  # trip -> indices into pairs
+    meta: list[tuple[ReoptTripInput, list[int]]] = []
     for t in dirty:
         remaining = [s for s in t.stops if not s.completed]
         if not remaining:
@@ -58,17 +60,30 @@ def plan_reopt(
         if not idxs:
             actions.append(ReoptAction(t.trip_id, "none", reason="no_remaining_stops"))
             continue
+
+        remaining = [s for s in t.stops if not s.completed]
+        pickup_remaining = [s for s in remaining if s.stop_type == "pickup"]
+
         total = sum(durs[i] for i in idxs)
         new_drop = now + timedelta(seconds=total)
+
+        new_pickup: datetime | None = None
+        if pickup_remaining:
+            raw_pickup = now + timedelta(seconds=durs[idxs[0]])
+            floor_candidates = [x for x in (t.pickup_ready_at, t.current_eta_pickup) if x is not None]
+            floor = max(floor_candidates) if floor_candidates else None
+            new_pickup = max(raw_pickup, floor) if floor is not None else raw_pickup
+            # Drop must stay after floored pickup (remaining legs after first)
+            after_secs = sum(durs[i] for i in idxs[1:]) if len(idxs) > 1 else max(durs[idxs[0]], 60)
+            new_drop = max(new_drop, new_pickup + timedelta(seconds=max(after_secs, 60)))
+
         old_drop = t.current_eta_drop
         drift = 0.0
         if old_drop is not None:
             drift = abs((new_drop - old_drop).total_seconds()) / 60.0
 
-        # Deadline risk?
         deadline_risk = False
         cursor = now
-        remaining = [s for s in t.stops if not s.completed]
         for i, stop in enumerate(remaining):
             cursor = cursor + timedelta(seconds=durs[idxs[i]])
             if stop.deadline_at and cursor > stop.deadline_at:
@@ -80,26 +95,25 @@ def plan_reopt(
                 ReoptAction(
                     t.trip_id,
                     "rematch",
+                    new_eta_pickup=new_pickup,
                     new_eta_drop=new_drop,
                     drift_minutes=drift,
                     reason="deadline_risk",
                 )
             )
         elif drift >= drift_threshold_minutes or deadline_risk:
-            # Prefer ETA refresh; rematch only if unboarded and severe
-            if deadline_risk and drift >= drift_threshold_minutes * 2:
+            if deadline_risk and drift >= drift_threshold_minutes * 2 and not t.boarded_guest_ids:
                 actions.append(
                     ReoptAction(
                         t.trip_id,
                         "rematch",
+                        new_eta_pickup=new_pickup,
                         new_eta_drop=new_drop,
                         drift_minutes=drift,
                         reason="severe_drift",
                     )
                 )
             else:
-                # pickup eta ≈ now + first leg
-                new_pickup = now + timedelta(seconds=durs[idxs[0]]) if idxs else now
                 actions.append(
                     ReoptAction(
                         t.trip_id,
@@ -115,6 +129,7 @@ def plan_reopt(
                 ReoptAction(
                     t.trip_id,
                     "refresh_eta",
+                    new_eta_pickup=new_pickup,
                     new_eta_drop=new_drop,
                     drift_minutes=drift,
                     reason="dirty_refresh",

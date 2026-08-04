@@ -6,7 +6,6 @@ Event-scoped vehicle dispatch: **Guest app** + **Admin Portal** (Admin & Driver 
 | --- | --- |
 | [`PLAN.md`](PLAN.md) | Architecture & milestones |
 | [`DESIGN.md`](DESIGN.md) | Matching approach & trade-offs |
-| [`DEPLOY.md`](DEPLOY.md) | Go-live / cloud deployment |
 
 After cloning this repo you can run the **full stack locally** with the steps below.
 
@@ -119,12 +118,6 @@ npx expo start
 2. Admin Portal → **Ride requests** → **Approve** (matching assigns a driver).
 3. Guest app → **Ride** → driver name / plate / ETA + map.
 4. Driver portal (`driver01@…`) → accept → status updates → live location while on trip.
-
----
-
-## Deploy
-
-See [`DEPLOY.md`](DEPLOY.md) for Railway/Render API + Vercel Admin/Guest.
 
 ---
 

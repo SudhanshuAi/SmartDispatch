@@ -21,7 +21,7 @@ Login: `guest001@smartdispatch.local` (**Priya Kapoor** after seed)
 
 - Pickup details (travel ETA, pickup point, accommodation)
 - Auto match view (driver name, plate, ETA) — no browsing/choosing drivers
-- Live tracking: native map + OpenStreetMap embed on web
+- Live tracking: map on native; OpenStreetMap static map on web (tap to open full map)
 - On-demand ride request → pending until admin approves
 - Expo push token registration on device (when permitted)
 

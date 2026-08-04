@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy.orm import Session, joinedload
@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.matching_engine.reopt import DEFAULT_DEBOUNCE_SECONDS, plan_reopt
 from app.matching_engine.routing import CachedTravelProvider
 from app.matching_engine.types import GeoPoint, ReoptTripInput, StopSnapshot
-from app.models import Location, Trip
+from app.models import Location, Trip, TripGuest
 from app.models.enums import TripStatus
 from app.realtime import location_store
 from app.realtime.hub import channels_for_trip, hub
@@ -100,7 +100,7 @@ def apply_live_eta_reopt(db: Session) -> dict:
         db.query(Trip)
         .options(
             joinedload(Trip.stops),
-            joinedload(Trip.trip_guests),
+            joinedload(Trip.trip_guests).joinedload(TripGuest.guest),
             joinedload(Trip.driver),
         )
         .filter(Trip.status.in_(ACTIVE))
@@ -131,6 +131,12 @@ def apply_live_eta_reopt(db: Session) -> dict:
             loc = locs.get(s.location_id)
             if not loc:
                 continue
+            # Treat arrived pickup as done for ETA planning so pickup+drop don't collapse
+            pickup_done = (
+                s.stop_type.value == "pickup"
+                and (s.arrived_at is not None or s.completed_at is not None)
+            )
+            drop_done = s.stop_type.value == "drop" and s.completed_at is not None
             stops.append(
                 StopSnapshot(
                     location_id=s.location_id,
@@ -140,11 +146,16 @@ def apply_live_eta_reopt(db: Session) -> dict:
                     guest_id=s.guest_id,
                     sequence=s.sequence,
                     deadline_at=s.deadline_at,
-                    completed=s.completed_at is not None,
+                    completed=pickup_done or drop_done,
                 )
             )
             deadlines.append(s.deadline_at)
         boarded = tuple(tg.guest_id for tg in t.trip_guests if tg.boarded_at)
+        ready_at = t.scheduled_pickup_at
+        for tg in t.trip_guests:
+            if tg.guest and tg.guest.travel_eta:
+                if ready_at is None or tg.guest.travel_eta > ready_at:
+                    ready_at = tg.guest.travel_eta
         inputs.append(
             ReoptTripInput(
                 trip_id=t.id,
@@ -152,6 +163,8 @@ def apply_live_eta_reopt(db: Session) -> dict:
                 route_version=t.route_version,
                 needs_eta_refresh=True,
                 current_eta_drop=t.eta_drop,
+                current_eta_pickup=t.eta_pickup,
+                pickup_ready_at=ready_at,
                 guest_deadlines=tuple(deadlines),
                 boarded_guest_ids=boarded,
                 stops=tuple(stops),
@@ -173,10 +186,24 @@ def apply_live_eta_reopt(db: Session) -> dict:
         if not trip:
             continue
         if action.action == "refresh_eta":
-            if action.new_eta_pickup is not None:
+            # Never rewrite pickup ETA after arriving / boarding
+            if (
+                action.new_eta_pickup is not None
+                and trip.status
+                in {TripStatus.offered, TripStatus.accepted, TripStatus.en_route}
+            ):
                 trip.eta_pickup = action.new_eta_pickup
             if action.new_eta_drop is not None:
-                trip.eta_drop = action.new_eta_drop
+                # Keep drop after pickup when both would collapse
+                if (
+                    trip.eta_pickup is not None
+                    and action.new_eta_drop <= trip.eta_pickup
+                    and trip.status
+                    in {TripStatus.offered, TripStatus.accepted, TripStatus.en_route}
+                ):
+                    trip.eta_drop = trip.eta_pickup + timedelta(minutes=15)
+                else:
+                    trip.eta_drop = action.new_eta_drop
             trip.route_version += 1
             refreshed += 1
             guest_ids = [tg.guest_id for tg in trip.trip_guests]

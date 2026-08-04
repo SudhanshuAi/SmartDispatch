@@ -1,27 +1,60 @@
-import { StyleSheet, Text, View } from "react-native";
+import { useMemo } from "react";
+import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import type { GuestLocation, GuestMatch } from "../types";
 
 /**
- * Default / web implementation — must not import react-native-maps.
- * Native builds resolve LiveTripMap.native.tsx instead.
+ * Default / web map — used on web and as fallback.
+ * Native (iOS/Android) resolves LiveTripMap.native.tsx instead (react-native-maps).
+ *
+ * Uses a static OSM image (no iframe / X-Frame issues on Vercel).
  */
 export function LiveTripMap({ match }: { match: GuestMatch }) {
-  const hasDriver = match.driver_lat != null && match.driver_lng != null;
+  const lat = match.driver_lat ?? match.pickup?.lat ?? match.destination?.lat ?? 28.6139;
+  const lng = match.driver_lng ?? match.pickup?.lng ?? match.destination?.lng ?? 77.209;
+
+  const { imageUrl, openUrl } = useMemo(() => {
+    const markers: string[] = [];
+    if (match.driver_lat != null && match.driver_lng != null) {
+      markers.push(`${match.driver_lat},${match.driver_lng},red-pushpin`);
+    }
+    if (match.pickup) {
+      markers.push(`${match.pickup.lat},${match.pickup.lng},orange-pushpin`);
+    }
+    if (match.destination) {
+      markers.push(`${match.destination.lat},${match.destination.lng},green-pushpin`);
+    }
+    if (markers.length === 0) {
+      markers.push(`${lat},${lng},lightblue1`);
+    }
+    const markerParam = markers.join("|");
+    const imageUrl =
+      `https://staticmap.openstreetmap.de/staticmap.php` +
+      `?center=${lat},${lng}&zoom=13&size=640x280&maptype=mapnik&markers=${markerParam}`;
+    const openUrl =
+      `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=14/${lat}/${lng}`;
+    return { imageUrl, openUrl };
+  }, [lat, lng, match.driver_lat, match.driver_lng, match.pickup, match.destination]);
 
   return (
-    <View style={styles.fallback}>
-      <Text style={styles.fallbackTitle}>Live tracking</Text>
-      <Text style={styles.muted}>
-        Driver ETA pickup {fmtEta(match.eta_pickup)} · drop {fmtEta(match.eta_drop)}
-      </Text>
-      {hasDriver && (
-        <Text style={styles.coords}>
-          Driver @ {match.driver_lat!.toFixed(4)}, {match.driver_lng!.toFixed(4)}
+    <View style={styles.wrap}>
+      <Pressable onPress={() => void Linking.openURL(openUrl)} accessibilityRole="link">
+        <Image source={{ uri: imageUrl }} style={styles.map} resizeMode="cover" />
+      </Pressable>
+      <View style={styles.meta}>
+        <Text style={styles.title}>Live tracking</Text>
+        <Text style={styles.muted}>
+          ETA pickup {fmtEta(match.eta_pickup)} · drop {fmtEta(match.eta_drop)}
         </Text>
-      )}
-      {match.pickup && <LocLine label="Pickup" loc={match.pickup} />}
-      {match.destination && <LocLine label="Drop" loc={match.destination} />}
-      <Text style={styles.hint}>Interactive map is available in Expo Go on iOS/Android.</Text>
+        {match.driver_name ? (
+          <Text style={styles.driver}>
+            {match.driver_name}
+            {match.vehicle_number ? ` · ${match.vehicle_number}` : ""}
+          </Text>
+        ) : null}
+        <Text style={styles.legend}>Red = driver · Orange = pickup · Green = drop · tap map to open</Text>
+        {match.pickup && <LocLine label="Pickup" loc={match.pickup} />}
+        {match.destination && <LocLine label="Drop" loc={match.destination} />}
+      </View>
     </View>
   );
 }
@@ -45,18 +78,23 @@ function LocLine({ label, loc }: { label: string; loc: GuestLocation }) {
 }
 
 const styles = StyleSheet.create({
-  fallback: {
-    padding: 16,
+  wrap: {
     borderRadius: 16,
-    backgroundColor: "#eef6f4",
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: "#d5e0dc",
-    gap: 6,
+    backgroundColor: "#eef6f4",
   },
-  fallbackTitle: { fontSize: 16, fontWeight: "700", color: "#0f3d38" },
+  map: {
+    width: "100%",
+    height: 220,
+    backgroundColor: "#d5e0dc",
+  },
+  meta: { padding: 12, gap: 4 },
+  title: { fontSize: 16, fontWeight: "700", color: "#0f3d38" },
   muted: { color: "#5a736e" },
-  coords: { fontFamily: "monospace", color: "#0f3d38" },
-  hint: { marginTop: 8, color: "#8aa39d", fontSize: 12 },
+  driver: { color: "#0f3d38", fontWeight: "600" },
+  legend: { color: "#8aa39d", fontSize: 11, marginTop: 2 },
   locLine: { color: "#0f3d38" },
   locLabel: { fontWeight: "600" },
 });

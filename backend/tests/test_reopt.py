@@ -71,3 +71,66 @@ def test_driver_offline_mid_trip_not_in_engine_scope_but_reopt_still_refreshes(n
     t = _trip(now)
     result = plan_reopt([t], now=now, travel=travel)
     assert result.actions[0].trip_id == t.trip_id
+
+
+def test_reopt_pickup_eta_respects_ready_floor(now):
+    """Live travel shorter than plan must not pull pickup ETA before ready_at."""
+    travel = CachedTravelProvider()
+    airport = GeoPoint(28.5562, 77.1000)
+    hotel = GeoPoint(28.6205, 77.2150)
+    gid = uuid4()
+    ready = now + timedelta(hours=3)
+    t = ReoptTripInput(
+        trip_id=uuid4(),
+        driver_id=uuid4(),
+        route_version=1,
+        needs_eta_refresh=True,
+        current_eta_drop=ready + timedelta(minutes=40),
+        current_eta_pickup=ready,
+        pickup_ready_at=ready,
+        guest_deadlines=(ready + timedelta(hours=2),),
+        boarded_guest_ids=(),
+        stops=(
+            StopSnapshot(uuid4(), airport.lat, airport.lng, "pickup", gid, 0, ready + timedelta(hours=2)),
+            StopSnapshot(uuid4(), hotel.lat, hotel.lng, "drop", gid, 1, ready + timedelta(hours=2)),
+        ),
+        live_position=GeoPoint(28.56, 77.11),
+        seats_used=1,
+        luggage_used=1,
+    )
+    result = plan_reopt([t], now=now, travel=travel, last_run_at=None)
+    assert result.actions[0].action == "refresh_eta"
+    assert result.actions[0].new_eta_pickup is not None
+    assert result.actions[0].new_eta_pickup >= ready
+    assert result.actions[0].new_eta_drop is not None
+    assert result.actions[0].new_eta_drop > result.actions[0].new_eta_pickup
+
+
+def test_reopt_skips_pickup_eta_after_pickup_completed(now):
+    travel = CachedTravelProvider()
+    airport = GeoPoint(28.5562, 77.1000)
+    hotel = GeoPoint(28.6205, 77.2150)
+    gid = uuid4()
+    t = ReoptTripInput(
+        trip_id=uuid4(),
+        driver_id=uuid4(),
+        route_version=1,
+        needs_eta_refresh=True,
+        current_eta_drop=now + timedelta(minutes=30),
+        current_eta_pickup=now - timedelta(minutes=5),
+        pickup_ready_at=now - timedelta(hours=1),
+        guest_deadlines=(now + timedelta(hours=2),),
+        boarded_guest_ids=(),
+        stops=(
+            StopSnapshot(
+                uuid4(), airport.lat, airport.lng, "pickup", gid, 0, None, completed=True
+            ),
+            StopSnapshot(uuid4(), hotel.lat, hotel.lng, "drop", gid, 1, now + timedelta(hours=2)),
+        ),
+        live_position=airport,
+        seats_used=1,
+        luggage_used=1,
+    )
+    result = plan_reopt([t], now=now, travel=travel, last_run_at=None)
+    assert result.actions[0].new_eta_pickup is None
+    assert result.actions[0].new_eta_drop is not None

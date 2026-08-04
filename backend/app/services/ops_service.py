@@ -49,6 +49,8 @@ def list_ride_requests(db: Session, status: RideRequestStatus | None = None) -> 
     q = db.query(RideRequest).options(joinedload(RideRequest.guest).joinedload(Guest.user))
     if status:
         q = q.filter(RideRequest.status == status)
+    else:
+        q = q.filter(RideRequest.status != RideRequestStatus.cancelled)
     rows = q.order_by(RideRequest.created_at.desc()).all()
     return [_ride_to_read(r) for r in rows]
 

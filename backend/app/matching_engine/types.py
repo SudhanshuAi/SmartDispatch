@@ -170,6 +170,9 @@ class ReoptTripInput:
     live_position: GeoPoint
     seats_used: int
     luggage_used: int
+    current_eta_pickup: datetime | None = None
+    # Floor for pickup ETA (guest travel_eta / scheduled) — prevents jumping earlier than the plan
+    pickup_ready_at: datetime | None = None
 
 
 @dataclass(frozen=True)

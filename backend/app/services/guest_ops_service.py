@@ -154,6 +154,49 @@ def create_ride_request(db: Session, guest_id: UUID, payload: GuestRideRequestCr
     if existing:
         raise HTTPException(status_code=409, detail="You already have a pending ride request")
 
+    # Block while an active trip is already assigned
+    active = (
+        db.query(TripGuest)
+        .join(Trip, Trip.id == TripGuest.trip_id)
+        .filter(
+            TripGuest.guest_id == guest_id,
+            Trip.status.in_(
+                [
+                    TripStatus.planned,
+                    TripStatus.offered,
+                    TripStatus.accepted,
+                    TripStatus.en_route,
+                    TripStatus.at_pickup,
+                    TripStatus.in_progress,
+                ]
+            ),
+        )
+        .first()
+    )
+    if active:
+        raise HTTPException(
+            status_code=409,
+            detail="You already have an active trip — wait until it completes before requesting again",
+        )
+
+    # Hide prior demo/test noise: supersede old matched/queued rows without an active trip
+    stale = (
+        db.query(RideRequest)
+        .filter(
+            RideRequest.guest_id == guest_id,
+            RideRequest.status.in_(
+                [
+                    RideRequestStatus.matched,
+                    RideRequestStatus.approved,
+                    RideRequestStatus.queued,
+                ]
+            ),
+        )
+        .all()
+    )
+    for old in stale:
+        old.status = RideRequestStatus.cancelled
+
     rr = RideRequest(
         guest_id=guest_id,
         origin_location_id=origin_id,
@@ -181,8 +224,12 @@ def list_my_ride_requests(db: Session, guest_id: UUID) -> list[RideRequestRead]:
     rows = (
         db.query(RideRequest)
         .options(joinedload(RideRequest.guest).joinedload(Guest.user))
-        .filter(RideRequest.guest_id == guest_id)
+        .filter(
+            RideRequest.guest_id == guest_id,
+            RideRequest.status != RideRequestStatus.cancelled,
+        )
         .order_by(RideRequest.created_at.desc())
+        .limit(10)
         .all()
     )
     return [_ride_to_read(r) for r in rows]
