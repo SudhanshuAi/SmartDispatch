@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
-import type { AuthUser } from "../types";
-import { api } from "../api/client";
+import type { AuthUser } from "./types";
+import { api } from "./api/client";
 
 /**
  * Register Expo push token with the backend when permissions allow.
